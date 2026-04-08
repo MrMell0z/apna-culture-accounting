@@ -104,6 +104,27 @@ const formatProviderDate = (value) => {
   const date = new Date(`${value}T00:00:00Z`);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 };
+const formatPkrContext = (amount, label = "historical PKR") =>
+  hasAmount(amount) ? `(${fmtPKR(amount)} ${label})` : "";
+const csvCell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+const buildCsv = (rows) => rows.map((row) => row.map(csvCell).join(",")).join("\n");
+const escapeHtml = (value) =>
+  String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+const downloadTextFile = (filename, content, type) => {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
 
 const calcTotals = (sales, expenses) => {
   const revenue = sales.reduce((sum, sale) => sum + toNumber(sale.total_revenue_cad), 0);
@@ -302,11 +323,11 @@ function ErrBar({ msg }) {
   return <div className="err-bar">⚠ {msg}</div>;
 }
 
-function PkrBracket({ amount, equivalent = false, inline = false }) {
+function PkrBracket({ amount, label = "historical PKR", inline = false }) {
   if (!hasAmount(amount)) return null;
   return (
     <span className={inline ? "pkr-inline" : "pkr-note"}>
-      ({fmtPKR(amount)} {equivalent ? "PKR equivalent" : "PKR"})
+      ({fmtPKR(amount)} {label})
     </span>
   );
 }
@@ -370,16 +391,16 @@ function Dashboard({ products, sales, expenses, rateInfo, onRefreshRate, refresh
         <div className="stat-card">
           <div className="stat-label">COGS</div>
           <div className="stat-value blue">{fmtCAD(monthTotals.cogsCad)}</div>
-          {hasAmount(monthTotals.cogsPkr) ? <PkrBracket amount={monthTotals.cogsPkr} /> : <div className="stat-sub">Cost of goods sold</div>}
+          {hasAmount(monthTotals.cogsPkr) ? <PkrBracket amount={monthTotals.cogsPkr} label="historical PKR" /> : <div className="stat-sub">Cost of goods sold</div>}
         </div>
         <div className="stat-card">
           <div className="stat-label">Op. Expenses</div>
           <div className="stat-value red">{fmtCAD(monthTotals.opexCad)}</div>
-          {hasAmount(monthTotals.opexPkr) ? <PkrBracket amount={monthTotals.opexPkr} /> : <div className="stat-sub">{monthExpenses.length} entr{monthExpenses.length !== 1 ? "ies" : "y"}</div>}
+          {hasAmount(monthTotals.opexPkr) ? <PkrBracket amount={monthTotals.opexPkr} label="from PKR entries" /> : <div className="stat-sub">{monthExpenses.length} entr{monthExpenses.length !== 1 ? "ies" : "y"}</div>}
         </div>
         <div className="stat-card">
           <div className="stat-label">Net Profit</div>
-          <div className={`stat-value ${monthTotals.profit >= 0 ? "green" : "red"}`}>{fmtCAD(monthTotals.profit)}</div>
+          <div className="stat-value green">{fmtCAD(monthTotals.profit)}</div>
           <div className="stat-sub">{monthTotals.revenue > 0 ? `${((monthTotals.profit / monthTotals.revenue) * 100).toFixed(1)}% margin` : "—"}</div>
         </div>
       </div>
@@ -393,30 +414,30 @@ function Dashboard({ products, sales, expenses, rateInfo, onRefreshRate, refresh
         <div className="stat-card">
           <div className="stat-label">COGS</div>
           <div className="stat-value blue">{fmtCAD(yearTotals.cogsCad)}</div>
-          <PkrBracket amount={yearTotals.cogsPkr} />
+          <PkrBracket amount={yearTotals.cogsPkr} label="historical PKR" />
         </div>
         <div className="stat-card">
           <div className="stat-label">Op. Expenses</div>
           <div className="stat-value red">{fmtCAD(yearTotals.opexCad)}</div>
-          <PkrBracket amount={yearTotals.opexPkr} />
+          <PkrBracket amount={yearTotals.opexPkr} label="from PKR entries" />
         </div>
         <div className="stat-card">
           <div className="stat-label">Net Profit</div>
-          <div className={`stat-value ${yearTotals.profit >= 0 ? "green" : "red"}`}>{fmtCAD(yearTotals.profit)}</div>
+          <div className="stat-value green">{fmtCAD(yearTotals.profit)}</div>
         </div>
       </div>
 
       <div className="card" style={{ borderLeft: `4px solid ${t.green}`, background: t.greenLight, marginBottom: 16 }}>
         <div className="card-title" style={{ color: t.green }}>All-Time Net Profit</div>
-        <div style={{ fontSize: 32, fontFamily: "'Playfair Display',serif", fontWeight: 700, color: allTotals.profit >= 0 ? t.green : t.red }}>
+        <div style={{ fontSize: 32, fontFamily: "'Playfair Display',serif", fontWeight: 700, color: t.green }}>
           {fmtCAD(allTotals.profit)}
         </div>
         <div style={{ fontSize: 13, color: t.muted, marginTop: 4, lineHeight: 1.6 }}>
-          Revenue {fmtCAD(allTotals.revenue)} · COGS {fmtCAD(allTotals.cogsCad)} {hasAmount(allTotals.cogsPkr) ? `(${fmtPKR(allTotals.cogsPkr)} PKR)` : ""} · Op. Expenses {fmtCAD(allTotals.opexCad)} {hasAmount(allTotals.opexPkr) ? `(${fmtPKR(allTotals.opexPkr)} PKR)` : ""}
+          Revenue {fmtCAD(allTotals.revenue)} · COGS {fmtCAD(allTotals.cogsCad)} {formatPkrContext(allTotals.cogsPkr, "historical PKR")} · Op. Expenses {fmtCAD(allTotals.opexCad)} {formatPkrContext(allTotals.opexPkr, "from PKR entries")}
         </div>
         {hasAmount(allTotals.totalExpPkr) && (
           <div className="muted-line" style={{ marginTop: 6 }}>
-            Total expenses: {fmtCAD(allTotals.totalExpCad)} ({fmtPKR(allTotals.totalExpPkr)} PKR equivalent)
+            Total expenses: {fmtCAD(allTotals.totalExpCad)} {formatPkrContext(allTotals.totalExpPkr, "from PKR entries")}
           </div>
         )}
       </div>
@@ -894,7 +915,7 @@ function Sales({ products, setProducts, sales, setSales, rateInfo }) {
         </div>
         <div className="stat-card">
           <div className="stat-label">Gross Profit</div>
-          <div className={`stat-value ${allTotals.revenue - allTotals.cogsCad >= 0 ? "green" : "red"}`}>{fmtCAD(allTotals.revenue - allTotals.cogsCad)}</div>
+          <div className="stat-value green">{fmtCAD(allTotals.revenue - allTotals.cogsCad)}</div>
           <div className="stat-sub">Before operating expenses</div>
         </div>
       </div>
@@ -937,7 +958,7 @@ function Sales({ products, setProducts, sales, setSales, rateInfo }) {
                         <div style={{ color: t.blue, fontWeight: 600 }}>{hasAmount(sale.total_cogs_cad) ? fmtCAD(sale.total_cogs_cad) : "—"}</div>
                         <PkrBracket amount={totalSalePkr} />
                       </td>
-                      <td style={{ fontWeight: 600, color: saleGrossProfit != null ? (saleGrossProfit >= 0 ? t.green : t.red) : t.muted }}>
+                      <td style={{ fontWeight: 600, color: saleGrossProfit != null ? t.green : t.muted }}>
                         {saleGrossProfit != null ? fmtCAD(saleGrossProfit) : "—"}
                       </td>
                       <td><button className="btn btn-danger btn-sm" onClick={() => handleDelete(sale.id)}>{Ic.trash}</button></td>
@@ -1040,7 +1061,7 @@ function Sales({ products, setProducts, sales, setSales, rateInfo }) {
                     COGS: {fmtCAD(saleCogs)}
                     {form.unit_cost_pkr && <span style={{ opacity: 0.8 }}> ({fmtPKR(saleCogsPkr)} PKR)</span>}
                   </div>
-                  <div className={`info-box ${grossProfit >= 0 ? "info-green" : "info-red"}`}>Gross Profit: {fmtCAD(grossProfit)}</div>
+                  <div className="info-box info-green">Gross Profit: {fmtCAD(grossProfit)}</div>
                 </>
               )}
             </div>
@@ -1176,17 +1197,17 @@ function Expenses({ expenses, setExpenses, sales, rateInfo }) {
         <div className="stat-card">
           <div className="stat-label">COGS (from Sales)</div>
           <div className="stat-value blue">{fmtCAD(monthTotals.cogsCad)}</div>
-          <PkrBracket amount={monthTotals.cogsPkr} />
+          <PkrBracket amount={monthTotals.cogsPkr} label="historical PKR" />
         </div>
         <div className="stat-card">
           <div className="stat-label">Operating Expenses</div>
           <div className="stat-value red">{fmtCAD(monthTotals.opexCad)}</div>
-          <PkrBracket amount={monthTotals.opexPkr} />
+          <PkrBracket amount={monthTotals.opexPkr} label="from PKR entries" />
         </div>
         <div className="stat-card">
           <div className="stat-label">Total Expenses</div>
           <div className="stat-value red">{fmtCAD(monthTotals.totalExpCad)}</div>
-          <PkrBracket amount={monthTotals.totalExpPkr} equivalent />
+          <PkrBracket amount={monthTotals.totalExpPkr} label="from PKR entries" />
         </div>
       </div>
 
@@ -1198,7 +1219,7 @@ function Expenses({ expenses, setExpenses, sales, rateInfo }) {
           <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 28, fontWeight: 700, color: t.blue }}>
             {fmtCAD(allTotals.cogsCad)}
           </div>
-          <PkrBracket amount={allTotals.cogsPkr} />
+          <PkrBracket amount={allTotals.cogsPkr} label="historical PKR" />
           {Object.keys(bySaleProduct).length > 0 && (
             <>
               <hr className="divider" />
@@ -1206,7 +1227,7 @@ function Expenses({ expenses, setExpenses, sales, rateInfo }) {
                 <div key={name} className="report-row" style={{ padding: "7px 0" }}>
                   <span style={{ color: t.text, fontWeight: 500, fontSize: 13 }}>{name}</span>
                   <span style={{ fontWeight: 600, color: t.blue }}>
-                    {fmtCAD(values.cad)} {hasAmount(values.pkr) ? `(${fmtPKR(values.pkr)} PKR)` : ""}
+                    {fmtCAD(values.cad)} {formatPkrContext(values.pkr, "historical PKR")}
                   </span>
                 </div>
               ))}
@@ -1221,7 +1242,7 @@ function Expenses({ expenses, setExpenses, sales, rateInfo }) {
           <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 28, fontWeight: 700, color: t.red }}>
             {fmtCAD(allTotals.opexCad)}
           </div>
-          <PkrBracket amount={allTotals.opexPkr} />
+          <PkrBracket amount={allTotals.opexPkr} label="from PKR entries" />
           {Object.keys(byCategory).length > 0 && (
             <>
               <hr className="divider" />
@@ -1229,7 +1250,7 @@ function Expenses({ expenses, setExpenses, sales, rateInfo }) {
                 <div key={category} className="report-row" style={{ padding: "7px 0" }}>
                   <span className="lbl">{category}</span>
                   <span style={{ fontWeight: 600, color: t.red }}>
-                    {fmtCAD(values.cad)} {hasAmount(values.pkr) ? `(${fmtPKR(values.pkr)} PKR)` : ""}
+                    {fmtCAD(values.cad)} {formatPkrContext(values.pkr, "from PKR entries")}
                   </span>
                 </div>
               ))}
@@ -1244,12 +1265,12 @@ function Expenses({ expenses, setExpenses, sales, rateInfo }) {
           <div>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Total Expenses — All Time</div>
             <div style={{ fontSize: 13, color: t.muted, marginTop: 2 }}>
-              COGS {fmtCAD(allTotals.cogsCad)} {hasAmount(allTotals.cogsPkr) ? `(${fmtPKR(allTotals.cogsPkr)} PKR)` : ""} + Operating {fmtCAD(allTotals.opexCad)} {hasAmount(allTotals.opexPkr) ? `(${fmtPKR(allTotals.opexPkr)} PKR)` : ""}
+              COGS {fmtCAD(allTotals.cogsCad)} {formatPkrContext(allTotals.cogsPkr, "historical PKR")} + Operating {fmtCAD(allTotals.opexCad)} {formatPkrContext(allTotals.opexPkr, "from PKR entries")}
             </div>
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 30, fontWeight: 700, color: t.red }}>{fmtCAD(allTotals.totalExpCad)}</div>
-            <PkrBracket amount={allTotals.totalExpPkr} equivalent />
+            <PkrBracket amount={allTotals.totalExpPkr} label="from PKR entries" />
           </div>
         </div>
       </div>
@@ -1395,6 +1416,82 @@ function Reports({ sales, expenses }) {
     byCategory[expense.category].pkr += expensePkrTotal(expense);
   });
 
+  const exportRows = [
+    ["Report", label],
+    ["Revenue (CAD)", fmtCAD(totals.revenue)],
+    ["COGS (CAD)", fmtCAD(totals.cogsCad)],
+    ["COGS (historical PKR)", hasAmount(totals.cogsPkr) ? fmtPKR(totals.cogsPkr) : ""],
+    ["Gross Profit (CAD)", fmtCAD(grossProfit)],
+    ["Operating Expenses (CAD)", fmtCAD(totals.opexCad)],
+    ["Operating Expenses (PKR entries)", hasAmount(totals.opexPkr) ? fmtPKR(totals.opexPkr) : ""],
+    ["Total Expenses (CAD)", fmtCAD(totals.totalExpCad)],
+    ["Total Expenses (PKR entries)", hasAmount(totals.totalExpPkr) ? fmtPKR(totals.totalExpPkr) : ""],
+    ["Net Profit (CAD)", fmtCAD(totals.profit)],
+  ];
+
+  const handleExportExcel = () => {
+    const rows = [...exportRows];
+    if (topProducts.length > 0) {
+      rows.push([]);
+      rows.push(["Top Items by Revenue"]);
+      topProducts.forEach(([name, revenue]) => rows.push([name, fmtCAD(revenue)]));
+    }
+    const categoryEntries = Object.entries(byCategory).sort((a, b) => b[1].cad - a[1].cad);
+    if (categoryEntries.length > 0) {
+      rows.push([]);
+      rows.push(["Operating Expenses by Category"]);
+      categoryEntries.forEach(([category, values]) => {
+        rows.push([category, fmtCAD(values.cad), hasAmount(values.pkr) ? fmtPKR(values.pkr) : ""]);
+      });
+    }
+    downloadTextFile(`apna-culture-report-${label.toLowerCase().replaceAll(" ", "-")}.csv`, buildCsv(rows), "text/csv;charset=utf-8");
+  };
+
+  const handleExportPdf = () => {
+    const categoryEntries = Object.entries(byCategory).sort((a, b) => b[1].cad - a[1].cad);
+    const popup = window.open("", "_blank", "width=900,height=700");
+    if (!popup) return;
+
+    const summaryRows = exportRows
+      .map(([name, value]) => `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(value)}</td></tr>`)
+      .join("");
+    const topProductRows = topProducts
+      .map(([name, revenue]) => `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(fmtCAD(revenue))}</td></tr>`)
+      .join("");
+    const categoryRows = categoryEntries
+      .map(([category, values]) => `<tr><td>${escapeHtml(category)}</td><td>${escapeHtml(fmtCAD(values.cad))}</td><td>${escapeHtml(hasAmount(values.pkr) ? fmtPKR(values.pkr) : "")}</td></tr>`)
+      .join("");
+
+    popup.document.write(`<!DOCTYPE html>
+      <html>
+        <head>
+          <title>Apna Culture Report - ${escapeHtml(label)}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #2A2725; }
+            h1 { margin: 0 0 8px; }
+            h2 { margin: 24px 0 10px; font-size: 18px; }
+            p { margin: 0 0 18px; color: #666; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+            th { background: #f4efe7; }
+          </style>
+        </head>
+        <body>
+          <h1>Apna Culture Report</h1>
+          <p>${escapeHtml(label)}</p>
+          <h2>Summary</h2>
+          <table>
+            <tbody>${summaryRows}</tbody>
+          </table>
+          ${topProducts.length > 0 ? `<h2>Top Items by Revenue</h2><table><tbody>${topProductRows}</tbody></table>` : ""}
+          ${categoryEntries.length > 0 ? `<h2>Operating Expenses by Category</h2><table><thead><tr><th>Category</th><th>CAD</th><th>PKR Entries</th></tr></thead><tbody>${categoryRows}</tbody></table>` : ""}
+        </body>
+      </html>`);
+    popup.document.close();
+    popup.focus();
+    popup.print();
+  };
+
   return (
     <div>
       <div className="page-title">Reports</div>
@@ -1420,6 +1517,8 @@ function Reports({ sales, expenses }) {
             {years.map((yearOption) => <option key={yearOption}>{yearOption}</option>)}
           </select>
         )}
+        <button className="btn btn-sm btn-outline" onClick={handleExportExcel}>Export to Excel</button>
+        <button className="btn btn-sm btn-outline" onClick={handleExportPdf}>Export to PDF</button>
       </div>
 
       <div className="card">
@@ -1431,41 +1530,33 @@ function Reports({ sales, expenses }) {
         <div className="report-row">
           <span style={{ color: t.blue }}>Less: Cost of Goods Sold (COGS)</span>
           <span style={{ fontWeight: 600, color: t.blue }}>
-            ({fmtCAD(totals.cogsCad)}) {hasAmount(totals.cogsPkr) ? `(${fmtPKR(totals.cogsPkr)} PKR)` : ""}
+            ({fmtCAD(totals.cogsCad)}) {formatPkrContext(totals.cogsPkr, "historical PKR")}
           </span>
         </div>
         <div className="report-row" style={{ borderBottom: `2px solid ${t.border}`, paddingBottom: 12 }}>
           <span style={{ fontWeight: 600 }}>Gross Profit</span>
-          <span style={{ fontWeight: 700, color: grossProfit >= 0 ? t.green : t.red }}>{fmtCAD(grossProfit)}</span>
+          <span style={{ fontWeight: 700, color: t.green }}>{fmtCAD(grossProfit)}</span>
         </div>
         <div className="report-row" style={{ paddingTop: 12 }}>
           <span style={{ color: t.red }}>Less: Operating Expenses</span>
           <span style={{ fontWeight: 600, color: t.red }}>
-            ({fmtCAD(totals.opexCad)}) {hasAmount(totals.opexPkr) ? `(${fmtPKR(totals.opexPkr)} PKR)` : ""}
+            ({fmtCAD(totals.opexCad)}) {formatPkrContext(totals.opexPkr, "from PKR entries")}
           </span>
         </div>
         <div className="report-row">
           <span className="lbl">Total Expenses</span>
           <span className="val" style={{ color: t.red }}>
-            {fmtCAD(totals.totalExpCad)} {hasAmount(totals.totalExpPkr) ? `(${fmtPKR(totals.totalExpPkr)} PKR equivalent)` : ""}
+            {fmtCAD(totals.totalExpCad)} {formatPkrContext(totals.totalExpPkr, "from PKR entries")}
           </span>
         </div>
         <div className="report-total">
           <span style={{ fontWeight: 700, fontSize: 16 }}>Net Profit</span>
-          <span style={{ fontWeight: 700, fontSize: 22, color: totals.profit >= 0 ? t.green : t.red }}>
+          <span style={{ fontWeight: 700, fontSize: 22, color: t.green }}>
             {fmtCAD(totals.profit)}
             {totals.revenue > 0 && <span style={{ fontSize: 14, marginLeft: 8, fontWeight: 500 }}>({((totals.profit / totals.revenue) * 100).toFixed(1)}% margin)</span>}
           </span>
         </div>
       </div>
-
-      {hasAmount(totals.totalExpPkr) && (
-        <div className="card" style={{ background: t.purpleLight, border: "1px solid #C39BD3", marginBottom: 16 }}>
-          <div style={{ fontSize: 13, color: t.purple, fontWeight: 600 }}>
-            PKR-originated costs tracked in this view: {fmtPKR(totals.totalExpPkr)} PKR.
-          </div>
-        </div>
-      )}
 
       {(topProducts.length > 0 || Object.keys(byCategory).length > 0) && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }} className="two-col">
@@ -1487,7 +1578,7 @@ function Reports({ sales, expenses }) {
                 <div key={category} className="report-row">
                   <span className="lbl">{category}</span>
                   <span style={{ fontWeight: 600, color: t.red }}>
-                    {fmtCAD(values.cad)} {hasAmount(values.pkr) ? `(${fmtPKR(values.pkr)} PKR)` : ""}
+                    {fmtCAD(values.cad)} {formatPkrContext(values.pkr, "from PKR entries")}
                   </span>
                 </div>
               ))}
