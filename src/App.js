@@ -1649,6 +1649,16 @@ export default function App() {
   const [refreshingRate, setRefreshingRate] = useState(false);
   const [page, setPage] = useState("dashboard");
   const [open, setOpen] = useState(false);
+  
+    useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("/sw.js")
+          .catch((error) => console.error("Service worker registration failed:", error));
+      });
+    }
+  }, []);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
