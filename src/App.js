@@ -1804,7 +1804,7 @@ export default function App() {
 
         <div className={`sidebar ${open ? "open" : ""}`}>
           <div className="brand">
-            <img className="brand-logo" src="/brand-logo.png" alt="Apna Culture logo" />
+            <img className="brand-logo" src="/icons/brand-logo.png" alt="Apna Culture logo" />
             <div className="brand-name">Apna Culture</div>
             <div className="brand-sub">Accounting & Profit Tracker</div>
           </div>
