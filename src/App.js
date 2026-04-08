@@ -194,6 +194,7 @@ const css = `
   .app{font-family:'DM Sans',sans-serif;display:flex;min-height:100vh;color:${t.text};background:${t.bg}}
   .sidebar{width:224px;background:${t.sidebar};color:white;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;transition:transform .28s ease}
   .brand{padding:22px 20px 18px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:8px}
+  .brand-logo{display:block;width:64px;height:64px;object-fit:cover;border-radius:18px;margin-bottom:12px;background:#050505}
   .brand-name{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:white;line-height:1.2}
   .brand-sub{font-size:11px;opacity:.6;margin-top:3px;letter-spacing:.4px}
   .nav-btn{display:flex;align-items:center;gap:11px;width:100%;padding:12px 20px;background:none;border:none;color:${t.sidebarText};font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;cursor:pointer;text-align:left;transition:background .15s;border-right:3px solid transparent}
@@ -1649,16 +1650,6 @@ export default function App() {
   const [refreshingRate, setRefreshingRate] = useState(false);
   const [page, setPage] = useState("dashboard");
   const [open, setOpen] = useState(false);
-  
-    useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker
-          .register("/sw.js")
-          .catch((error) => console.error("Service worker registration failed:", error));
-      });
-    }
-  }, []);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -1716,6 +1707,80 @@ export default function App() {
     window.localStorage.setItem(RATE_STORAGE_KEY, JSON.stringify(rateInfo));
   }, [rateInfo]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    const registerServiceWorker = () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    };
+    window.addEventListener("load", registerServiceWorker, { once: true });
+    return () => window.removeEventListener("load", registerServiceWorker);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let startX = 0;
+    let startY = 0;
+    let lastX = 0;
+    let mode = null;
+
+    const isStandalone = () =>
+      window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
+
+    const isInteractiveTarget = (target) =>
+      target instanceof Element && Boolean(target.closest("input, textarea, select, button, a"));
+
+    const onTouchStart = (event) => {
+      if (window.innerWidth > 1024 || event.touches.length !== 1 || isInteractiveTarget(event.target)) return;
+
+      const touch = event.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+      lastX = touch.clientX;
+      mode = null;
+
+      if (open) {
+        mode = "close";
+        return;
+      }
+
+      if (isStandalone() && startX >= 16 && startX <= 40) {
+        mode = "open";
+      }
+    };
+
+    const onTouchMove = (event) => {
+      if (!mode || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      lastX = touch.clientX;
+      if (Math.abs(touch.clientY - startY) > Math.abs(touch.clientX - startX)) {
+        mode = null;
+      }
+    };
+
+    const onTouchEnd = () => {
+      if (!mode) return;
+      const deltaX = lastX - startX;
+      if (mode === "open" && deltaX > 70) {
+        setOpen(true);
+      }
+      if (mode === "close" && deltaX < -70) {
+        setOpen(false);
+      }
+      mode = null;
+    };
+
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [open]);
+
   const navigate = (id) => {
     setPage(id);
     setOpen(false);
@@ -1739,6 +1804,7 @@ export default function App() {
 
         <div className={`sidebar ${open ? "open" : ""}`}>
           <div className="brand">
+            <img className="brand-logo" src="/brand-logo.png" alt="Apna Culture logo" />
             <div className="brand-name">Apna Culture</div>
             <div className="brand-sub">Accounting & Profit Tracker</div>
           </div>
